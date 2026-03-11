@@ -5,7 +5,7 @@ import { KpiCard } from '@/components/kpi-card'
 import { PeriodSelector } from '@/components/period-selector'
 import { PatientAcquisitionChart } from '@/components/charts/patient-acquisition-chart'
 import { RetentionChart } from '@/components/charts/retention-chart'
-import { type Period, periodStart, getPatientStats } from '@/lib/metrics'
+import { parsePeriod, periodStart, getPatientStats } from '@/lib/metrics'
 import { prisma } from '@/lib/prisma'
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -22,7 +22,7 @@ interface PageProps {
 
 export default async function PatientsPage({ searchParams }: PageProps) {
   const params = await searchParams
-  const period = (params.period ?? '30d') as Period
+  const period = parsePeriod(params.period)
   const start = periodStart(period)
 
   const [stats, recentPatients] = await Promise.all([

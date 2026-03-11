@@ -6,26 +6,8 @@ import { KpiCard } from '@/components/kpi-card'
 import { PeriodSelector } from '@/components/period-selector'
 import { RevenueChart } from '@/components/charts/revenue-chart'
 import { PaymentMethodChart } from '@/components/charts/payment-method-chart'
-import { type Period, periodStart, getRevenueSummary, getOutstandingBalance } from '@/lib/metrics'
+import { type Period, parsePeriod, getRevenueSummary, getOutstandingBalance } from '@/lib/metrics'
 import { prisma } from '@/lib/prisma'
-
-function buildWeeklyBuckets(payments: { amount: number; paidAt: Date }[], start: Date) {
-  const buckets: Record<string, number> = {}
-  const now = new Date()
-  const current = new Date(start)
-  while (current <= now) {
-    buckets[current.toISOString().split('T')[0]] = 0
-    current.setDate(current.getDate() + 7)
-  }
-  for (const payment of payments) {
-    const weekStart = new Date(payment.paidAt)
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-    weekStart.setHours(0, 0, 0, 0)
-    const key = weekStart.toISOString().split('T')[0]
-    buckets[key] = (buckets[key] ?? 0) + payment.amount
-  }
-  return Object.entries(buckets).map(([week, revenue]) => ({ week, revenue }))
-}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -47,8 +29,7 @@ interface PageProps {
 
 export default async function FinancialPage({ searchParams }: PageProps) {
   const params = await searchParams
-  const period = (params.period ?? '30d') as Period
-  const start = periodStart(period)
+  const period = parsePeriod(params.period)
 
   const [revenue, outstanding, overdueInvoicesRaw] = await Promise.all([
     getRevenueSummary(period),
@@ -65,7 +46,6 @@ export default async function FinancialPage({ searchParams }: PageProps) {
     }),
   ])
 
-  const weeklyRevenue = buildWeeklyBuckets(revenue.payments, start)
   const overdueInvoices = overdueInvoicesRaw.map((inv) => ({
     id: inv.id,
     patientName: `${inv.appointment.patient.firstName} ${inv.appointment.patient.lastName}`,
@@ -114,7 +94,7 @@ export default async function FinancialPage({ searchParams }: PageProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <RevenueChart data={weeklyRevenue} />
+            <RevenueChart data={revenue.weeklyRevenue} />
           </CardContent>
         </Card>
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import {
-  Period,
+  parsePeriod,
   getRevenueSummary,
   getOutstandingBalance,
   getAppointmentStats,
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const period = (searchParams.get('period') ?? '30d') as Period
+  const period = parsePeriod(searchParams.get('period') ?? undefined)
 
   const [revenue, outstanding, appointments, patients] = await Promise.all([
     getRevenueSummary(period),

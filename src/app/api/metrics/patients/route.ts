@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { Period, periodStart, getPatientStats } from '@/lib/metrics'
+import { parsePeriod, periodStart, getPatientStats } from '@/lib/metrics'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const period = (searchParams.get('period') ?? '30d') as Period
+  const period = parsePeriod(searchParams.get('period') ?? undefined)
   const start = periodStart(period)
 
   const [stats, recentPatients] = await Promise.all([

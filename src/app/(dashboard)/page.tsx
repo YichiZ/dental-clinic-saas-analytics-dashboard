@@ -3,7 +3,7 @@ import { KpiCard } from '@/components/kpi-card'
 import { PeriodSelector } from '@/components/period-selector'
 import { Suspense } from 'react'
 import {
-  type Period,
+  parsePeriod,
   getRevenueSummary,
   getOutstandingBalance,
   getAppointmentStats,
@@ -24,7 +24,7 @@ interface PageProps {
 
 export default async function OverviewPage({ searchParams }: PageProps) {
   const params = await searchParams
-  const period = (params.period ?? '30d') as Period
+  const period = parsePeriod(params.period)
 
   const [revenue, outstanding, appointments, patients] = await Promise.all([
     getRevenueSummary(period),

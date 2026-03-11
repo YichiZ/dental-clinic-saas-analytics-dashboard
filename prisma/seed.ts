@@ -3,9 +3,10 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { faker } from '@faker-js/faker'
 import bcrypt from 'bcryptjs'
 
-const adapter = new PrismaPg({
-  connectionString: 'postgresql://postgres:postgres@localhost:5432/dental_dashboard',
-})
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) throw new Error('DATABASE_URL environment variable is not set')
+
+const adapter = new PrismaPg({ connectionString })
 const prisma = new PrismaClient({ adapter })
 
 const ACQUISITION_SOURCES = ['referral', 'walk-in', 'online', 'insurance', 'other'] as const
