@@ -6,26 +6,7 @@ import { PeriodSelector } from '@/components/period-selector'
 import { AppointmentVolumeChart } from '@/components/charts/appointment-volume-chart'
 import { UtilizationChart } from '@/components/charts/utilization-chart'
 import { BusiestHoursChart } from '@/components/charts/busiest-hours-chart'
-
-interface OperationsData {
-  total: number
-  completed: number
-  noShows: number
-  cancelled: number
-  noShowRate: number
-  dailyVolume: { date: string; total: number; noShows: number }[]
-  busiestHours: { hour: number; count: number }[]
-  utilizationByDay: { day: string; utilization: number; total: number }[]
-}
-
-async function fetchOperations(period: string): Promise<OperationsData> {
-  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
-  const res = await fetch(`${baseUrl}/api/metrics/operations?period=${period}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('Failed to fetch operations data')
-  return res.json()
-}
+import { type Period, periodStart, getAppointmentStats } from '@/lib/metrics'
 
 interface PageProps {
   searchParams: Promise<{ period?: string }>
@@ -33,16 +14,53 @@ interface PageProps {
 
 export default async function OperationsPage({ searchParams }: PageProps) {
   const params = await searchParams
-  const period = (params.period ?? '30d') as '7d' | '30d' | '90d'
+  const period = (params.period ?? '30d') as Period
+  const start = periodStart(period)
 
-  let data: OperationsData | null = null
-  let error: string | null = null
+  const stats = await getAppointmentStats(period)
+  const { appointments } = stats
 
-  try {
-    data = await fetchOperations(period)
-  } catch {
-    error = 'Failed to load operations data'
+  // Daily volume buckets
+  const buckets: Record<string, { total: number; noShows: number }> = {}
+  const now = new Date()
+  const cur = new Date(start)
+  while (cur <= now) {
+    buckets[cur.toISOString().split('T')[0]] = { total: 0, noShows: 0 }
+    cur.setDate(cur.getDate() + 1)
   }
+  for (const appt of appointments) {
+    const key = new Date(appt.scheduledAt).toISOString().split('T')[0]
+    if (buckets[key]) {
+      buckets[key] = {
+        total: buckets[key].total + 1,
+        noShows: buckets[key].noShows + (appt.status === 'no-show' ? 1 : 0),
+      }
+    }
+  }
+  const dailyVolume = Object.entries(buckets).map(([date, data]) => ({ date, ...data }))
+
+  // Busiest hours
+  const hourCounts: Record<number, number> = {}
+  for (const appt of appointments) {
+    const hour = new Date(appt.scheduledAt).getHours()
+    hourCounts[hour] = (hourCounts[hour] ?? 0) + 1
+  }
+  const busiestHours = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: hourCounts[h] ?? 0 })).filter(h => h.count > 0)
+
+  // Utilization by day of week
+  const dayUtil: Record<number, { total: number; completed: number }> = {}
+  for (const appt of appointments) {
+    const day = new Date(appt.scheduledAt).getDay()
+    const existing = dayUtil[day] ?? { total: 0, completed: 0 }
+    dayUtil[day] = { total: existing.total + 1, completed: existing.completed + (appt.status === 'completed' ? 1 : 0) }
+  }
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const utilizationByDay = Array.from({ length: 7 }, (_, d) => {
+    const data = dayUtil[d] ?? { total: 0, completed: 0 }
+    return { day: days[d], utilization: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0, total: data.total }
+  })
+
+  const noShowRate = Math.round(stats.noShowRate * 10) / 10
 
   return (
     <div className="space-y-6">
@@ -56,73 +74,28 @@ export default async function OperationsPage({ searchParams }: PageProps) {
         </Suspense>
       </div>
 
-      {error && (
-        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</div>
-      )}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiCard title="Total Appointments" value={stats.total.toString()} icon={Calendar} trend="neutral" trendLabel={period} />
+        <KpiCard title="Completed" value={stats.completed.toString()} icon={CheckCircle} trend="up" trendLabel="completed" />
+        <KpiCard title="No-Shows" value={stats.noShows.toString()} icon={XCircle} trend={stats.noShows > 10 ? 'down' : 'up'} trendLabel="no-shows" />
+        <KpiCard title="No-Show Rate" value={`${noShowRate}%`} icon={TrendingDown} trend={noShowRate > 15 ? 'down' : 'up'} trendLabel="of appointments" />
+      </div>
 
-      {data && (
-        <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiCard
-              title="Total Appointments"
-              value={data.total.toString()}
-              icon={Calendar}
-              trend="neutral"
-              trendLabel={period}
-            />
-            <KpiCard
-              title="Completed"
-              value={data.completed.toString()}
-              icon={CheckCircle}
-              trend="up"
-              trendLabel="completed"
-            />
-            <KpiCard
-              title="No-Shows"
-              value={data.noShows.toString()}
-              icon={XCircle}
-              trend={data.noShows > 10 ? 'down' : 'up'}
-              trendLabel="no-shows"
-            />
-            <KpiCard
-              title="No-Show Rate"
-              value={`${data.noShowRate}%`}
-              icon={TrendingDown}
-              trend={data.noShowRate > 15 ? 'down' : 'up'}
-              trendLabel="of appointments"
-            />
-          </div>
+      <Card>
+        <CardHeader><CardTitle className="text-base">Appointment Volume</CardTitle></CardHeader>
+        <CardContent><AppointmentVolumeChart data={dailyVolume} /></CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Appointment Volume</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AppointmentVolumeChart data={data.dailyVolume} />
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Utilization by Day of Week</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <UtilizationChart data={data.utilizationByDay} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Busiest Hours</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BusiestHoursChart data={data.busiestHours} />
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      )}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Utilization by Day of Week</CardTitle></CardHeader>
+          <CardContent><UtilizationChart data={utilizationByDay} /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Busiest Hours</CardTitle></CardHeader>
+          <CardContent><BusiestHoursChart data={busiestHours} /></CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
