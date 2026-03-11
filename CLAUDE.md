@@ -111,3 +111,6 @@ All metric API routes accept `?period=7d|30d|90d`. Default: `30d`.
 ## MCP Integrations
 
 - **Linear:** Project management — tasks synced via `@linear/mcp-server`
+  - Project: `dental-clinic-saas-analytics-dashboard` (Linear project ID: `f0a2e6a1-9af3-4bce-9116-3885bb6001fe`)
+  - Team: `lifeopsapp` (key: `SPA`)
+  - Issues: SPA-5 through SPA-17 (Tasks 1–13 from implementation plan)
