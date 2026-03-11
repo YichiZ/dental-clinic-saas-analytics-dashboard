@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Clinic {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  phone     String
+  email     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  staff     Staff[]
+}
+
+model Staff {
+  id           String        @id @default(cuid())
+  clinicId     String
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  name         String
+  role         String        // "dentist" | "hygienist" | "admin"
+  email        String        @unique
+  phone        String?
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
+}
+
+model Patient {
+  id                String        @id @default(cuid())
+  firstName         String
+  lastName          String
+  email             String?       @unique
+  phone             String?
+  dateOfBirth       DateTime?
+  acquisitionSource String        // "referral" | "walk-in" | "online" | "insurance" | "other"
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  appointments      Appointment[]
+}
+
+model Appointment {
+  id          String    @id @default(cuid())
+  patientId   String
+  patient     Patient   @relation(fields: [patientId], references: [id])
+  staffId     String
+  staff       Staff     @relation(fields: [staffId], references: [id])
+  scheduledAt DateTime
+  duration    Int       // minutes
+  status      String    // "completed" | "cancelled" | "no-show" | "scheduled"
+  type        String    // "checkup" | "cleaning" | "filling" | "extraction" | "crown" | "root-canal" | "whitening" | "consultation"
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  treatments  Treatment[]
+  invoice     Invoice?
+}
+
+model Treatment {
+  id            String      @id @default(cuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  adaCode       String      // ADA procedure code e.g. "D0120"
+  description   String
+  fee           Float
+  createdAt     DateTime    @default(now())
+}
+
+model Invoice {
+  id            String      @id @default(cuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  totalAmount   Float
+  paidAmount    Float       @default(0)
+  status        String      // "paid" | "pending" | "partial" | "overdue"
+  dueDate       DateTime
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  payments      Payment[]
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+  amount    Float
+  method    String   // "cash" | "card" | "insurance" | "check"
+  paidAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
